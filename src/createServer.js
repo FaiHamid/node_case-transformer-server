@@ -1,42 +1,17 @@
 const http = require('http');
-const { detectCase } = require('./convertToCase/detectCase');
 const { convertToCase } = require('./convertToCase/convertToCase');
-
-const allCases = ['SNAKE', 'KEBAB', 'UPPER', 'CAMEL', 'PASCAL'];
+const { inputValidation } = require('./convertToCase/inputValidation');
 
 const createServer = () => {
   const server = http.createServer((req, res) => {
-    const errors = [];
-
     try {
       const [path, queryString] = req.url.split('?');
       const params = new URLSearchParams(queryString);
 
       const targetCase = params.get('toCase');
       const originalText = path.slice(1);
-      const originalCase = detectCase(originalText);
 
-      if (!originalText) {
-        errors.push({
-          message:
-            // eslint-disable-next-line max-len
-            'Text to convert is required. Correct request is: "/<TEXT_TO_CONVERT>?toCase=<CASE_NAME>".',
-        });
-      }
-
-      if (!targetCase) {
-        errors.push({
-          message:
-            // eslint-disable-next-line max-len
-            '"toCase" query param is required. Correct request is: "/<TEXT_TO_CONVERT>?toCase=<CASE_NAME>".',
-        });
-      } else if (!allCases.includes(targetCase)) {
-        errors.push({
-          message:
-            // eslint-disable-next-line max-len
-            'This case is not supported. Available cases: SNAKE, KEBAB, CAMEL, PASCAL, UPPER.',
-        });
-      }
+      const errors = inputValidation(originalText, targetCase);
 
       if (errors.length) {
         res.statusCode = 400;
@@ -46,25 +21,26 @@ const createServer = () => {
         return;
       }
 
-      const convertedText = convertToCase(
-        originalText,
-        targetCase,
-      ).convertedText;
+      const convertedTextandCase = convertToCase(originalText, targetCase);
 
       res.setHeader('Content-Type', 'application/json');
 
       res.write(
         JSON.stringify({
-          originalCase: originalCase,
+          originalCase: convertedTextandCase.originalCase,
           targetCase: targetCase,
           originalText: originalText,
-          convertedText: convertedText,
+          convertedText: convertedTextandCase.convertedText,
         }),
       );
 
       res.end();
     } catch (error) {
-      res.statusCode = 500;
+      if (error.message.includes('not found')) {
+        res.statusCode = 404;
+      } else {
+        res.statusCode = 500;
+      }
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ errors: [{ message: error.message }] }));
     }
